@@ -54,6 +54,12 @@ DEFINE_string(sigint_effect, "stop",
 DEFINE_string(sighup_effect, "snapshot",
              "Optional; action to take when a SIGHUP signal is received: "
              "snapshot, stop or none.");
+DEFINE_string(layername, "",
+      "Either layer name or type must be provided to prune command. "
+      "The specific layer to be pruned.");
+DEFINE_string(layertype, "",
+      "Either layer name or type must be provided to prune command. "
+      "Specifies all layers of given type to be pruned; either fc or conv.");
 
 // A simple registry for caffe commands.
 typedef int (*BrewFunction)();
@@ -256,6 +262,73 @@ int train() {
 }
 RegisterBrewFunction(train);
 
+// Compress trained weights.
+int compress() {
+  CHECK_GT(FLAGS_solver.size(), 0) << "Need a solver definition to prune.";
+  CHECK_GT(FLAGS_weights.size(), 0) << "Need weights to prune.";
+  CHECK(!FLAGS_layername.size() || !FLAGS_layertype.size())
+      << "Give one or the other argument but not both.";
+
+  caffe::SolverParameter solver_param;
+  caffe::ReadSolverParamsFromTextFileOrDie(FLAGS_solver, &solver_param);
+
+  // If the gpus flag is not provided, allow the mode and device to be set
+  // in the solver prototxt.
+  if (FLAGS_gpu.size() == 0
+      && solver_param.solver_mode() == caffe::SolverParameter_SolverMode_GPU) {
+      if (solver_param.has_device_id()) {
+          FLAGS_gpu = ""  +
+              boost::lexical_cast<string>(solver_param.device_id());
+      } else {  // Set default GPU if unspecified
+          FLAGS_gpu = "" + boost::lexical_cast<string>(0);
+      }
+  }
+
+  vector<int> gpus;
+  get_gpus(&gpus);
+  if (gpus.size() == 0) {
+    LOG(INFO) << "Use CPU.";
+    Caffe::set_mode(Caffe::CPU);
+  } else {
+    ostringstream s;
+    for (int i = 0; i < gpus.size(); ++i) {
+      s << (i ? ", " : "") << gpus[i];
+    }
+    LOG(INFO) << "Using GPUs " << s.str();
+
+    solver_param.set_device_id(gpus[0]);
+    Caffe::SetDevice(gpus[0]);
+    Caffe::set_mode(Caffe::GPU);
+    Caffe::set_solver_count(gpus.size());
+  }
+
+  caffe::SignalHandler signal_handler(
+        GetRequestedAction(FLAGS_sigint_effect),
+        GetRequestedAction(FLAGS_sighup_effect));
+
+  shared_ptr<caffe::Solver<float> >
+      solver(caffe::SolverRegistry<float>::CreateSolver(solver_param));
+
+  solver->SetActionFunction(signal_handler.GetActionFunction());
+
+  CopyLayers(solver.get(), FLAGS_weights);
+
+  if (gpus.size() > 1) {
+    caffe::P2PSync<float> sync(solver, NULL, solver->param());
+    sync.Run(gpus);
+  } else {
+    LOG(INFO) << "Starting Pruning";
+    if(FLAGS_layername.size())
+      solver->PruneLayer(FLAGS_layername.c_str());
+    else if(FLAGS_layertype.size())
+      solver->Prune(FLAGS_layertype.c_str());
+    LOG(INFO) << "Pruning Done.";
+    LOG(INFO) << "Starting Optimization";
+    solver->Solve();
+  }
+  return 0;
+}
+RegisterBrewFunction(compress);
 
 // Test: score a model.
 int test() {
@@ -431,6 +504,7 @@ int main(int argc, char** argv) {
       "usage: caffe <command> <args>\n\n"
       "commands:\n"
       "  train           train or finetune a model\n"
+      "  compress        compress a model (added)\n"
       "  test            score a model\n"
       "  device_query    show GPU diagnostic information\n"
       "  time            benchmark model execution time");

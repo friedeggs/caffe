@@ -273,6 +273,202 @@ void Solver<Dtype>::Step(int iters) {
   }
 }
 
+// template <typename Dtype>
+// void Solver<Dtype>::Compress(int iters) {
+//   vector<Blob<Dtype>*> bottom_vec;
+//   const int start_iter = iter_;
+//   const int stop_iter = iter_ + iters;
+//   int average_loss = this->param_.average_loss();
+//   vector<Dtype> losses;
+//   Dtype smoothed_loss = 0;
+//   // AdjustParams();
+//
+//   while (iter_ < stop_iter) {
+//     // zero-init the params
+//     net_->ClearParamDiffs();
+//     if (param_.test_interval() && iter_ % param_.test_interval() == 0
+//         && (iter_ > 0 || param_.test_initialization())
+//         && Caffe::root_solver()) {
+//       TestAll();
+//       if (requested_early_exit_) {
+//         // Break out of the while loop because stop was requested while testing.
+//         break;
+//       }
+//     }
+//
+//     for (int i = 0; i < callbacks_.size(); ++i) {
+//       callbacks_[i]->on_start();
+//     }
+//     const bool display = param_.display() && iter_ % param_.display() == 0;
+//     net_->set_debug_info(display && param_.debug_info());
+//     // accumulate the loss and gradient
+//     Dtype loss = 0;
+//     for (int i = 0; i < param_.iter_size(); ++i) {
+//       loss += net_->ForwardBackward(bottom_vec);
+//     }
+//     loss /= param_.iter_size();
+//     // average the loss across iterations for smoothed reporting
+//     if (losses.size() < average_loss) {
+//       losses.push_back(loss);
+//       int size = losses.size();
+//       smoothed_loss = (smoothed_loss * (size - 1) + loss) / size;
+//     } else {
+//       int idx = (iter_ - start_iter) % average_loss;
+//       smoothed_loss += (loss - losses[idx]) / average_loss;
+//       losses[idx] = loss;
+//     }
+//     if (display) {
+//       LOG_IF(INFO, Caffe::root_solver()) << "Iteration " << iter_
+//           << ", loss = " << smoothed_loss;
+//       const vector<Blob<Dtype>*>& result = net_->output_blobs();
+//       int score_index = 0;
+//       for (int j = 0; j < result.size(); ++j) {
+//         const Dtype* result_vec = result[j]->cpu_data();
+//         const string& output_name =
+//             net_->blob_names()[net_->output_blob_indices()[j]];
+//         const Dtype loss_weight =
+//             net_->blob_loss_weights()[net_->output_blob_indices()[j]];
+//         for (int k = 0; k < result[j]->count(); ++k) {
+//           ostringstream loss_msg_stream;
+//           if (loss_weight) {
+//             loss_msg_stream << " (* " << loss_weight
+//                             << " = " << loss_weight * result_vec[k] << " loss)";
+//           }
+//           LOG_IF(INFO, Caffe::root_solver()) << "    Train net output #"
+//               << score_index++ << ": " << output_name << " = "
+//               << result_vec[k] << loss_msg_stream.str();
+//         }
+//       }
+//     }
+//     for (int i = 0; i < callbacks_.size(); ++i) {
+//       callbacks_[i]->on_gradients_ready();
+//     }
+//     ApplyUpdate();
+//
+//     // Increment the internal iter_ counter -- its value should always indicate
+//     // the number of times the weights have been updated.
+//     ++iter_;
+//
+//     SolverAction::Enum request = GetRequestedAction();
+//
+//     // Save a snapshot if needed.
+//     if ((param_.snapshot()
+//          && iter_ % param_.snapshot() == 0
+//          && Caffe::root_solver()) ||
+//          (request == SolverAction::SNAPSHOT)) {
+//       Snapshot();
+//     }
+//     if (SolverAction::STOP == request) {
+//       requested_early_exit_ = true;
+//       // Break out of training loop.
+//       break;
+//     }
+//   }
+// }
+
+template <typename Dtype>
+void Solver<Dtype>::PruneLayer(const char* layer_name) {
+  CHECK(Caffe::root_solver());
+  LOG(INFO) << "Pruning " << net_->name();
+  LOG(INFO) << "Threshold: " << param_.prune_threshold(); // param_.lr_policy()
+
+  shared_ptr< Layer< Dtype > > layer = net_->layer_by_name(layer_name);
+  LOG(INFO) << "Pruning layer " << layer_name;
+  layer->Prune(param_.prune_threshold());
+
+  // Snapshot();
+
+  // After the optimization is done, run an additional train and test pass to
+  // display the train and test loss/outputs if appropriate (based on the
+  // display and test_interval settings, respectively).  Unlike in the rest of
+  // training, for the train net we only run a forward pass as we've already
+  // updated the parameters "max_iter" times -- this final pass is only done to
+  // display the loss, which is computed in the forward pass.
+  // Dtype loss;
+  // net_->ForwardPrefilled(&loss);
+  // LOG(INFO) << "Iteration " << iter_ << ", loss = " << loss;
+  TestAll();
+}
+
+template <typename Dtype>
+void Solver<Dtype>::Prune(const char* layer_type) {
+  CHECK(Caffe::root_solver());
+  LOG(INFO) << "Pruning " << net_->name();
+  LOG(INFO) << "Threshold: " << param_.prune_threshold(); // param_.lr_policy()
+
+  TestAll();
+
+  vector< shared_ptr< Layer< Dtype > > > layers = net_->layers();
+  vector< string > layer_names = net_->layer_names();
+  for(int i = 0 ; i < layers.size() ; i++) {
+    LOG(INFO) << "(Layer type)" << layers[i]->type();
+    if(strcmp(layers[i]->type(), layer_type) == 0) {
+      LOG(INFO) << "Pruning layer " << layer_names[i];
+      layers[i]->Prune(param_.prune_threshold());
+    }
+  }
+
+  // Snapshot();
+
+  // After the optimization is done, run an additional train and test pass to
+  // display the train and test loss/outputs if appropriate (based on the
+  // display and test_interval settings, respectively).  Unlike in the rest of
+  // training, for the train net we only run a forward pass as we've already
+  // updated the parameters "max_iter" times -- this final pass is only done to
+  // display the loss, which is computed in the forward pass.
+  // Dtype loss;
+  // net_->ForwardPrefilled(&loss);
+  // LOG(INFO) << "Iteration " << iter_ << ", loss = " << loss;
+  TestAll();
+}
+
+// template <typename Dtype>
+// void Solver<Dtype>::Compress(const char* resume_file, const char* layer_type) {
+//   CHECK(Caffe::root_solver());
+//   LOG(INFO) << "Compressing " << net_->name();
+//   LOG(INFO) << "Learning Rate Policy: " << param_.lr_policy();
+//   LOG(INFO) << "Base Learning Rate: " << param_.base_lr();
+//
+//   // Initialize to false every time we start solving.
+//   requested_early_exit_ = false;
+//
+//   if (resume_file) {
+//     LOG(INFO) << "Restoring previous solver status from " << resume_file;
+//     Restore(resume_file);
+//   }
+//
+//   // For a network that is trained by the solver, no bottom or top vecs
+//   // should be given, and we will just provide dummy vecs.
+//
+//   Prune(layer_type); // TODO temporary amount
+//   Step(param_.max_iter() - iter_);
+//   // If we haven't already, save a snapshot after optimization, unless
+//   // overridden by setting snapshot_after_train := false
+//   if (param_.snapshot_after_train()
+//       && (!param_.snapshot() || iter_ % param_.snapshot() != 0)) {
+//     Snapshot();
+//   }
+//   if (requested_early_exit_) {
+//     LOG(INFO) << "Compression stopped early.";
+//     return;
+//   }
+//   // After the optimization is done, run an additional train and test pass to
+//   // display the train and test loss/outputs if appropriate (based on the
+//   // display and test_interval settings, respectively).  Unlike in the rest of
+//   // training, for the train net we only run a forward pass as we've already
+//   // updated the parameters "max_iter" times -- this final pass is only done to
+//   // display the loss, which is computed in the forward pass.
+//   if (param_.display() && iter_ % param_.display() == 0) {
+//     Dtype loss;
+//     net_->ForwardPrefilled(&loss);
+//     LOG(INFO) << "Iteration " << iter_ << ", loss = " << loss;
+//   }
+//   if (param_.test_interval() && iter_ % param_.test_interval() == 0) {
+//     TestAll();
+//   }
+//   LOG(INFO) << "Compression Done.";
+// }
+
 template <typename Dtype>
 void Solver<Dtype>::Solve(const char* resume_file) {
   CHECK(Caffe::root_solver());
@@ -291,6 +487,7 @@ void Solver<Dtype>::Solve(const char* resume_file) {
   // should be given, and we will just provide dummy vecs.
   int start_iter = iter_;
   Step(param_.max_iter() - iter_);
+  // Compress(param_.max_iter()); // TODO temporary amount
   // If we haven't already, save a snapshot after optimization, unless
   // overridden by setting snapshot_after_train := false
   if (param_.snapshot_after_train()
@@ -341,6 +538,9 @@ void Solver<Dtype>::Test(const int test_net_id) {
   vector<Dtype> test_score;
   vector<int> test_score_output_id;
   const shared_ptr<Net<Dtype> >& test_net = test_nets_[test_net_id];
+  // shared_ptr< Layer< Dtype > > layer = test_net->layer_by_name("ip1");
+  // LOG(INFO) << "Pruning test layer ip1";
+  // layer->Prune(param_.prune_threshold());
   Dtype loss = 0;
   for (int i = 0; i < param_.test_iter(test_net_id); ++i) {
     SolverAction::Enum request = GetRequestedAction();
@@ -403,6 +603,10 @@ void Solver<Dtype>::Test(const int test_net_id) {
     }
     LOG(INFO) << "    Test net output #" << i << ": " << output_name << " = "
               << mean_score << loss_msg_stream.str();
+
+    // shared_ptr< Layer< Dtype > > layer2 = net_->layer_by_name("ip1");
+    // LOG(INFO) << "Pruning orig layer ip1";
+    // layer2->Prune(param_.prune_threshold());
   }
 }
 

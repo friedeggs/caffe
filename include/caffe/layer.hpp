@@ -177,6 +177,11 @@ class Layer {
       const vector<Blob<Dtype>*>& bottom);
 
   /**
+   * @brief Prunes the layer weights.
+   */
+  inline void Prune(Dtype threshold);
+
+  /**
    * @brief Returns the vector of learnable parameter blobs.
    */
   vector<shared_ptr<Blob<Dtype> > >& blobs() {
@@ -330,6 +335,10 @@ class Layer {
   /** The vector that indicates whether each top blob has a non-zero weight in
    *  the objective function. */
   vector<Dtype> loss_;
+
+  /** @brief Prune the layer. */
+  virtual void Prune_cpu(Dtype threshold){}
+  virtual void Prune_gpu(Dtype threshold){}
 
   /** @brief Using the CPU device, compute the layer output. */
   virtual void Forward_cpu(const vector<Blob<Dtype>*>& bottom,
@@ -496,6 +505,21 @@ inline void Layer<Dtype>::Backward(const vector<Blob<Dtype>*>& top,
     break;
   case Caffe::GPU:
     Backward_gpu(top, propagate_down, bottom);
+    break;
+  default:
+    LOG(FATAL) << "Unknown caffe mode.";
+  }
+}
+
+
+template <typename Dtype>
+inline void Layer<Dtype>::Prune(Dtype threshold) {
+  switch (Caffe::mode()) {
+  case Caffe::CPU:
+    Prune_cpu(threshold);
+    break;
+  case Caffe::GPU:
+    Prune_gpu(threshold);
     break;
   default:
     LOG(FATAL) << "Unknown caffe mode.";

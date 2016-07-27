@@ -38,6 +38,9 @@ void InnerProductLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
       weight_shape[1] = K_;
     }
     this->blobs_[0].reset(new Blob<Dtype>(weight_shape));
+    // // Initialize the mask
+    // mask_.Reshape(weight_shape);
+    // caffe_set(this->blobs_[0]->count(), Dtype(0), mask_.mutable_cpu_data());
     // fill the weights
     shared_ptr<Filler<Dtype> > weight_filler(GetFiller<Dtype>(
         this->layer_param_.inner_product_param().weight_filler()));
@@ -94,6 +97,36 @@ void InnerProductLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom,
         bias_multiplier_.cpu_data(),
         this->blobs_[1]->cpu_data(), (Dtype)1., top_data);
   }
+}
+
+template <typename Dtype>
+void InnerProductLayer<Dtype>::Prune_cpu(Dtype threshold_param) {
+  LOG(INFO) << "Calling Blob::Prune_cpu()";
+  this->blobs_[0]->Prune_cpu(threshold_param);
+}
+
+// Number of neurons with zero output connections
+template <typename Dtype>
+// vector<bool> InnerProductLayer<Dtype>::DeadNeuronsOut() {
+int InnerProductLayer<Dtype>::NumNeurons() {
+  Blob<Dtype> weights_blob(this->blobs_[0]->shape());
+  weights_blob.CopyFrom(*this->blobs_[0]);
+  // TODO: replace dimensions directly with M_, K_, N_, depending on transpose_
+  CHECK_EQ(weights_blob.num_axes(), 2) << "Apparently InnerProductLayer does not necessarily have exactly 2 axes"; // Should be 2 in InnerProductLayer // TODO remove
+  vector<bool> dead(weights_blob.shape(0)); //no column because those neurons should be for the previous layer
+  int num_dead = 0;
+  for(int i = 0 ; i < weights_blob.shape(0) ; ++i) {
+    dead[i] = true;
+    for(int j = 0 ; j < weights_blob.shape(1) ; ++j) { // Is it 0 or 1? Should be 1
+      if(weights_blob.data_at(i, j, 0, 0)) { // != 0
+        dead[i] = false;
+      }
+    }
+    if(dead[i])
+      ++num_dead;
+  }
+  // return dead;
+  return weights_blob.shape(0) - num_dead;
 }
 
 template <typename Dtype>

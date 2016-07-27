@@ -298,4 +298,71 @@ TYPED_TEST(BlobMathTest, TestScaleData) {
               this->epsilon_ * expected_diff_asum);
 }
 
+TYPED_TEST(BlobMathTest, TestMean) {
+  typedef typename TypeParam::Dtype Dtype;
+
+  // Uninitialized Blob should have sum of squares == 0.
+  EXPECT_EQ(0, this->blob_->mean_data());
+  FillerParameter filler_param;
+  filler_param.set_min(-3);
+  filler_param.set_max(3);
+  UniformFiller<Dtype> filler(filler_param);
+  filler.Fill(this->blob_);
+  Dtype expected_mean = 0;
+  const Dtype* data = this->blob_->cpu_data();
+  for (int i = 0; i < this->blob_->count(); ++i) {
+    expected_mean += data[i];
+  }
+  expected_mean /= this->blob_->count();
+  // Do a mutable access on the current device,
+  // so that the sumsq computation is done on that device.
+  // (Otherwise, this would only check the CPU sumsq implementation.)
+  switch (TypeParam::device) {
+  case Caffe::CPU:
+    this->blob_->mutable_cpu_data();
+    break;
+  case Caffe::GPU:
+    this->blob_->mutable_gpu_data();
+    break;
+  default:
+    LOG(FATAL) << "Unknown device: " << TypeParam::device;
+  }
+  EXPECT_NEAR(expected_mean, this->blob_->mean_data(),
+              std::abs(this->epsilon_ * expected_mean));
+}
+
+TYPED_TEST(BlobMathTest, TestStdDev) {
+  typedef typename TypeParam::Dtype Dtype;
+
+  // Uninitialized Blob should have sum of squares == 0.
+  EXPECT_EQ(0, this->blob_->std_data());
+  FillerParameter filler_param;
+  filler_param.set_min(-3);
+  filler_param.set_max(3);
+  UniformFiller<Dtype> filler(filler_param);
+  filler.Fill(this->blob_);
+  Dtype expected_stddev = 0;
+  Dtype mean = this->blob_->mean_data();
+  const Dtype* data = this->blob_->cpu_data();
+  for (int i = 0; i < this->blob_->count(); ++i) {
+    expected_stddev += (data[i] - mean) * (data[i] - mean);
+  }
+  expected_stddev = sqrt(expected_stddev / this->blob_->count());
+  // Do a mutable access on the current device,
+  // so that the sumsq computation is done on that device.
+  // (Otherwise, this would only check the CPU sumsq implementation.)
+  switch (TypeParam::device) {
+  case Caffe::CPU:
+    this->blob_->mutable_cpu_data();
+    break;
+  case Caffe::GPU:
+    this->blob_->mutable_gpu_data();
+    break;
+  default:
+    LOG(FATAL) << "Unknown device: " << TypeParam::device;
+  }
+  EXPECT_NEAR(expected_stddev, this->blob_->std_data(),
+              this->epsilon_ * expected_stddev);
+}
+
 }  // namespace caffe

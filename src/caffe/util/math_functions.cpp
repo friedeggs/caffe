@@ -150,6 +150,15 @@ void caffe_sub<double>(const int n, const double* a, const double* b,
   vdSub(n, a, b, y);
 }
 
+template <> void caffe_mul<unsigned int>(const int n, const unsigned int* a, const unsigned int* b, unsigned int* y) {
+  NOT_IMPLEMENTED;
+}
+
+template <> void caffe_mul<int>(const int n, const int* a, const int* b, int* y) {
+  NOT_IMPLEMENTED;
+}
+
+
 template <>
 void caffe_mul<float>(const int n, const float* a, const float* b,
     float* y) {

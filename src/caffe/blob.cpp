@@ -41,7 +41,32 @@ void Blob<Dtype>::Reshape(const vector<int>& shape) {
     capacity_ = count_;
     data_.reset(new SyncedMemory(capacity_ * sizeof(Dtype)));
     diff_.reset(new SyncedMemory(capacity_ * sizeof(Dtype)));
+    // if (apply_mask_) { // TODO: This code never actually runs
+    //   mask_.reset(new SyncedMemory(capacity_ * sizeof(Dtype)));
+    // }
   }
+}
+
+// template <>
+// void Blob<void>::AddMask() {
+//   NOT_IMPLEMENTED;
+// }
+
+template <>
+void Blob<unsigned int>::AddMask() {
+  NOT_IMPLEMENTED;
+}
+
+template <typename Dtype>
+void Blob<Dtype>::AddMask() {
+  if(apply_mask_) return;
+  apply_mask_ = true;
+  mask_.reset(new SyncedMemory(count_ * sizeof(Dtype))); // TODO Check: should be initialized to zeros // changed from capacity_ to count_ b/c capacity_ not always set to non-zero
+
+  caffe_set(count_, Dtype(1), static_cast<Dtype *>(mask_->mutable_cpu_data()));
+  LOG(INFO) << "Mask added";
+
+
 }
 
 template <typename Dtype>
@@ -63,14 +88,14 @@ template <typename Dtype>
 Blob<Dtype>::Blob(const int num, const int channels, const int height,
     const int width)
   // capacity_ must be initialized before calling Reshape
-  : capacity_(0) {
+  : capacity_(0), apply_mask_(false) {
   Reshape(num, channels, height, width);
 }
 
 template <typename Dtype>
 Blob<Dtype>::Blob(const vector<int>& shape)
   // capacity_ must be initialized before calling Reshape
-  : capacity_(0) {
+  : capacity_(0), apply_mask_(false) {
   Reshape(shape);
 }
 
@@ -83,6 +108,25 @@ const int* Blob<Dtype>::gpu_shape() const {
 template <typename Dtype>
 const Dtype* Blob<Dtype>::cpu_data() const {
   CHECK(data_);
+  if(apply_mask_) {
+    // Blob<Dtype>* masked_blob = new Blob<Dtype>(shape());
+    // Blob<Dtype> masked_blob;
+    // masked_blob.Reshape(shape());
+    // masked_blob.reset(new Blob<Dtype>(shape()));
+    // masked_blob.CopyFrom(*this, false, true);
+    Dtype* masked_weight = new Dtype[count_];//masked_blob.mutable_cpu_data();
+    const Dtype* mask_data = (const Dtype*)mask_->cpu_data();
+    const Dtype* orig_data = (const Dtype*)data_->cpu_data();
+    caffe_mul(count_, mask_data, orig_data, masked_weight);
+    // for(int i = 0 ; i < 5 ; i++) {
+    //   LOG(INFO) << mask_data[i] << " "
+    //   << orig_data[i] << " "
+    //   << masked_weight[i] << " ";
+    // }
+
+      // caffe_mul(count, bottom[0]->cpu_data(), bottom[1]->cpu_data(), top_data);
+    return (const Dtype*)(masked_weight);
+  }
   return (const Dtype*)data_->cpu_data();
 }
 
@@ -101,6 +145,16 @@ const Dtype* Blob<Dtype>::gpu_data() const {
 template <typename Dtype>
 const Dtype* Blob<Dtype>::cpu_diff() const {
   CHECK(diff_);
+  if(apply_mask_) {
+    // Blob<Dtype>* masked_blob = new Blob<Dtype>(shape());
+    // masked_blob.CopyFrom(*this, true, true);
+    // Blob<Dtype> masked_blob;
+    // masked_blob.Reshape(shape());
+    // Dtype* masked_weight = masked_blob.mutable_cpu_diff();
+    Dtype* masked_weight = new Dtype[count_];
+    caffe_mul(count_, (const Dtype*)mask_->cpu_data(), (const Dtype*)diff_->cpu_data(), masked_weight);
+    return (const Dtype*)(masked_weight);
+  }
   return (const Dtype*)diff_->cpu_data();
 }
 
@@ -113,6 +167,17 @@ const Dtype* Blob<Dtype>::gpu_diff() const {
 template <typename Dtype>
 Dtype* Blob<Dtype>::mutable_cpu_data() {
   CHECK(data_);
+  if(apply_mask_) {
+    // LOG(INFO) << "Printing mutable_cpu_data";
+    // Blob<Dtype>* masked_blob = new Blob<Dtype>(shape());
+    // masked_blob.CopyFrom(*this, false, true);
+    // Blob<Dtype> masked_blob;
+    // masked_blob.Reshape(shape());
+    // Dtype* masked_weight = masked_blob.mutable_cpu_data();
+    Dtype* masked_weight = new Dtype[count_];
+    caffe_mul(count_, (const Dtype*)mask_->cpu_data(), (const Dtype*)data_->cpu_data(), masked_weight);
+    return static_cast<Dtype*>(masked_weight);
+  }
   return static_cast<Dtype*>(data_->mutable_cpu_data());
 }
 
@@ -125,6 +190,18 @@ Dtype* Blob<Dtype>::mutable_gpu_data() {
 template <typename Dtype>
 Dtype* Blob<Dtype>::mutable_cpu_diff() {
   CHECK(diff_);
+  if(apply_mask_) {
+    // Blob<Dtype>* masked_blob = new Blob<Dtype>(shape());
+    // masked_blob.CopyFrom(*this, true, true);
+    // Blob<Dtype> masked_blob;
+    // masked_blob.reset(new Blob<Dtype>(shape()));
+    // Blob<Dtype> masked_blob;
+    // masked_blob.Reshape(shape());
+    // Dtype* masked_weight = masked_blob.mutable_cpu_diff();
+    Dtype* masked_weight = new Dtype[count_];
+    caffe_mul(count_, (const Dtype*)mask_->cpu_data(), (const Dtype*)diff_->cpu_data(), masked_weight);
+    return static_cast<Dtype*>(masked_weight);
+  }
   return static_cast<Dtype*>(diff_->mutable_cpu_data());
 }
 
@@ -138,6 +215,10 @@ template <typename Dtype>
 void Blob<Dtype>::ShareData(const Blob& other) {
   CHECK_EQ(count_, other.count());
   data_ = other.data();
+  if (other.apply_mask_) {
+    apply_mask_ = true;
+    mask_ = other.mask();
+  }
 }
 
 template <typename Dtype>
@@ -159,16 +240,16 @@ void Blob<Dtype>::Update() {
   case SyncedMemory::HEAD_AT_CPU:
     // perform computation on CPU
     caffe_axpy<Dtype>(count_, Dtype(-1),
-        static_cast<const Dtype*>(diff_->cpu_data()),
-        static_cast<Dtype*>(data_->mutable_cpu_data()));
+        static_cast<const Dtype*>(cpu_diff()),
+        static_cast<Dtype*>(mutable_cpu_data()));
     break;
   case SyncedMemory::HEAD_AT_GPU:
   case SyncedMemory::SYNCED:
 #ifndef CPU_ONLY
     // perform computation on GPU
     caffe_gpu_axpy<Dtype>(count_, Dtype(-1),
-        static_cast<const Dtype*>(diff_->gpu_data()),
-        static_cast<Dtype*>(data_->mutable_gpu_data()));
+        static_cast<const Dtype*>(gpu_diff()),
+        static_cast<Dtype*>(mutable_gpu_data()));
 #else
     NO_GPU;
 #endif
@@ -177,6 +258,97 @@ void Blob<Dtype>::Update() {
     LOG(FATAL) << "Syncedmem not initialized.";
   }
 }
+
+template <> void Blob<unsigned int>::Prune_cpu(unsigned int threshold_param) {
+  NOT_IMPLEMENTED;
+}
+
+template <> void Blob<int>::Prune_cpu(int threshold_param) {
+  NOT_IMPLEMENTED;
+}
+
+template <typename Dtype>
+void Blob<Dtype>::Prune_cpu(Dtype threshold_param) {
+  // Add mask
+  AddMask();
+  // Calculate threshold based on quality parameter threshold_param multiplied by standard deviation of weights
+  Dtype stddev = std_data();
+  const Dtype threshold = threshold_param * stddev;
+  LOG(INFO) << "================ Computed Threshold is: " << threshold << ", std is " << stddev << ", threshold_param is " << threshold_param;
+  // // // const Dtype* weight = (const Dtype*)data_->cpu_data(); // TODO fix cpu_data mask
+  const Dtype* weight = (const Dtype*)cpu_data(); // TODO fix cpu_data mask
+  Dtype* mask = static_cast<Dtype*>(mask_->mutable_cpu_data());
+  const int count = count_;
+  const Dtype mean = mean_data();
+  int num_active = 0;
+  for (int i = 0; i < count; ++i) {
+    mask[i] = (fabs(weight[i] - mean) > threshold) ? Dtype(1) : Dtype(0);
+    // mask[i] = 0;
+    if(mask[i])
+      ++num_active;
+    // if(i < 5) {
+    //   LOG(INFO) << weight[i] << " "
+    //           << mean << " "
+    //           << fabs(weight[i] - mean) << " "
+    //           << threshold << " "
+    //           << mask[i] << " "
+    //           << mask2[i];
+    // }
+  }
+  // for(int i = 0 ; i < 5 ; i++)
+  //   LOG(INFO) << mask2[i];
+  LOG(INFO) << "================ Pruned " << 100.*(count-num_active)/count << "\% of connections away. ";
+  LOG(INFO) << "================ " << num_active << " out of " << count << " connections remaining.";
+}
+
+template <> unsigned int Blob<unsigned int>::mean_data() const {
+  NOT_IMPLEMENTED;
+  return 0;
+}
+
+template <> int Blob<int>::mean_data() const {
+  NOT_IMPLEMENTED;
+  return 0;
+}
+
+template <> unsigned int Blob<unsigned int>::std_data() const {
+  NOT_IMPLEMENTED;
+  return 0;
+}
+
+template <> int Blob<int>::std_data() const {
+  NOT_IMPLEMENTED;
+  return 0;
+}
+
+template <typename Dtype>
+Dtype Blob<Dtype>::mean_data() const {
+
+  Dtype* multiplier;
+  multiplier = new Dtype[count_];
+  // multiplier = vector<Dtype>(count_);
+  caffe_set(count_, Dtype(1), multiplier);
+  // compute mean
+  Dtype mean = caffe_cpu_dot<Dtype>(count_, cpu_data(), multiplier) / count_;
+  delete[] multiplier;
+  return mean;
+}
+
+template <typename Dtype>
+Dtype Blob<Dtype>::std_data() const {
+  Dtype sumsq_mean, mean;
+  sumsq_mean = sumsq_data() / count_; //caffe_cpu_dot<Dtype>(count_, cpu_data(), cpu_data());
+  // LOG(INFO) << "-------------------------- sumsq_mean " << sumsq_mean;
+  mean = mean_data();
+  // LOG(INFO) << "-------------------------- mean " << mean;
+  return sqrt(sumsq_mean - mean * mean);
+  // return sumsq_data(vsSqr(count_, 1./(count_-1.), cpu_data());
+}
+
+// template <>
+// double Blob<double>::std_data() const {
+//   return sumsq_data(vdSqr(count_, 1./(count_-1.), cpu_data());
+// }
 
 template <> unsigned int Blob<unsigned int>::asum_data() const {
   NOT_IMPLEMENTED;
@@ -424,19 +596,19 @@ void Blob<Dtype>::CopyFrom(const Blob& source, bool copy_diff, bool reshape) {
   case Caffe::GPU:
     if (copy_diff) {
       caffe_copy(count_, source.gpu_diff(),
-          static_cast<Dtype*>(diff_->mutable_gpu_data()));
+          static_cast<Dtype*>(mutable_gpu_diff()));
     } else {
       caffe_copy(count_, source.gpu_data(),
-          static_cast<Dtype*>(data_->mutable_gpu_data()));
+          static_cast<Dtype*>(mutable_gpu_data()));
     }
     break;
   case Caffe::CPU:
     if (copy_diff) {
       caffe_copy(count_, source.cpu_diff(),
-          static_cast<Dtype*>(diff_->mutable_cpu_data()));
+          static_cast<Dtype*>(mutable_cpu_diff()));
     } else {
       caffe_copy(count_, source.cpu_data(),
-          static_cast<Dtype*>(data_->mutable_cpu_data()));
+          static_cast<Dtype*>(mutable_cpu_data()));
     }
     break;
   default:

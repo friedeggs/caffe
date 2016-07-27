@@ -24,7 +24,7 @@ template <typename Dtype>
 class Blob {
  public:
   Blob()
-       : data_(), diff_(), count_(0), capacity_(0) {}
+       : data_(), diff_(), count_(0), capacity_(0), apply_mask_(false) {}
 
   /// @brief Deprecated; use <code>Blob(const vector<int>& shape)</code>.
   explicit Blob(const int num, const int channels, const int height,
@@ -34,6 +34,7 @@ class Blob {
   /// @brief Deprecated; use <code>Reshape(const vector<int>& shape)</code>.
   void Reshape(const int num, const int channels, const int height,
       const int width);
+
   /**
    * @brief Change the dimensions of the blob, allocating new memory if
    *        necessary.
@@ -51,6 +52,8 @@ class Blob {
   void Reshape(const vector<int>& shape);
   void Reshape(const BlobShape& shape);
   void ReshapeLike(const Blob& other);
+  void AddMask();
+  void Prune_cpu(Dtype threshold_param);
   inline string shape_string() const {
     ostringstream stream;
     for (int i = 0; i < shape_.size(); ++i) {
@@ -216,6 +219,19 @@ class Blob {
     return diff_;
   }
 
+  inline const shared_ptr<SyncedMemory>& mask() const {
+    CHECK(mask_);
+    return mask_;
+  }
+
+  inline void set_masked(bool masked) {
+    apply_mask_ = masked;
+  }
+
+  inline bool masked() const {
+    return apply_mask_;
+  }
+
   const Dtype* cpu_data() const;
   void set_cpu_data(Dtype* data);
   const int* gpu_shape() const;
@@ -238,6 +254,9 @@ class Blob {
   Dtype sumsq_data() const;
   /// @brief Compute the sum of squares (L2 norm squared) of the diff.
   Dtype sumsq_diff() const;
+  /// @brief Compute the standard deviation (n-1) of the data.
+  Dtype std_data() const;
+  Dtype mean_data() const;
 
   /// @brief Scale the blob data by a constant factor.
   void scale_data(Dtype scale_factor);
@@ -269,9 +288,11 @@ class Blob {
   shared_ptr<SyncedMemory> data_;
   shared_ptr<SyncedMemory> diff_;
   shared_ptr<SyncedMemory> shape_data_;
+  shared_ptr<SyncedMemory> mask_;
   vector<int> shape_;
   int count_;
   int capacity_;
+  bool apply_mask_;
 
   DISABLE_COPY_AND_ASSIGN(Blob);
 };  // class Blob
