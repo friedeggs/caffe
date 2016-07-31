@@ -224,6 +224,16 @@ class Blob {
     return mask_;
   }
 
+  inline const shared_ptr<SyncedMemory>& masked_data() const {
+    CHECK(masked_data_);
+    return masked_data_;
+  }
+
+  inline const shared_ptr<SyncedMemory>& masked_diff() const {
+    CHECK(masked_diff_);
+    return masked_diff_;
+  }
+
   inline void set_masked(bool masked) {
     apply_mask_ = masked;
   }
@@ -289,6 +299,8 @@ class Blob {
   shared_ptr<SyncedMemory> diff_;
   shared_ptr<SyncedMemory> shape_data_;
   shared_ptr<SyncedMemory> mask_;
+  shared_ptr<SyncedMemory> masked_data_;
+  shared_ptr<SyncedMemory> masked_diff_;
   vector<int> shape_;
   int count_;
   int capacity_;

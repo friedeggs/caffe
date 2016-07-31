@@ -16,6 +16,42 @@ __Note:__ Convolution is not yet implemented.
 
 ## Example
 
+First follow the [MNIST tutorial](http://caffe.berkeleyvision.org/gathered/examples/mnist.html).
+
+Create a `lenet_compressor.prototxt` file as in `examples/mnist/` based off of `lenet_solver.prototxt`:
+```
+# The train/test net protocol buffer definition
+net: "examples/mnist/lenet_train_test.prototxt"
+# test_iter specifies how many forward passes the test should carry out.
+# In the case of MNIST, we have test batch size 100 and 100 test iterations,
+# covering the full 10,000 testing images.
+test_iter: 100
+# Carry out testing every 500 training iterations.
+test_interval: 500
+# The base learning rate, momentum and the weight decay of the network.
+base_lr: 0.001 # retrain with lr 1/10 of the original
+momentum: 0.9
+weight_decay: 0.0005
+# The learning rate policy
+lr_policy: "inv"
+gamma: 0.0001
+power: 0.75
+# Display every 100 iterations
+display: 100
+# The maximum number of iterations
+max_iter: 1000
+# snapshot intermediate results
+snapshot: 5000
+snapshot_prefix: "examples/mnist/lenet_compressed"
+# solver mode: CPU or GPU
+solver_mode: CPU
+prune_threshold: 2
+```
+
+Note that `base_lr` is reduced by a factor of 10 and there is an additional `prune_threshold` parameter arbitrarily set to 2.
+
+Run the compress command:
+
 `build/tools/caffe compress -solver examples/mnist/lenet_compressor.prototxt -weights examples/mnist/lenet_iter_10000.caffemodel -layertype InnerProduct`
 
 Output:
@@ -111,7 +147,102 @@ I0727 00:01:43.715199 1934443264 net.cpp:283] Network initialization done.
 I0727 00:01:43.718755 1934443264 caffe.cpp:358] Running for 50 iterations.
 I0727 00:01:43.751853 1934443264 caffe.cpp:381] Batch 0, accuracy = 0.96
 I0727 00:01:43.751885 1934443264 caffe.cpp:381] Batch 0, loss = 0.446991
-...
+I0727 00:01:43.783586 1934443264 caffe.cpp:381] Batch 1, accuracy = 0.96
+I0727 00:01:43.783618 1934443264 caffe.cpp:381] Batch 1, loss = 0.462931
+I0727 00:01:43.815724 1934443264 caffe.cpp:381] Batch 2, accuracy = 0.94
+I0727 00:01:43.815757 1934443264 caffe.cpp:381] Batch 2, loss = 0.465818
+I0727 00:01:43.844215 1934443264 caffe.cpp:381] Batch 3, accuracy = 0.95
+I0727 00:01:43.844249 1934443264 caffe.cpp:381] Batch 3, loss = 0.50214
+I0727 00:01:43.874644 1934443264 caffe.cpp:381] Batch 4, accuracy = 0.93
+I0727 00:01:43.874686 1934443264 caffe.cpp:381] Batch 4, loss = 0.504952
+I0727 00:01:43.906430 1934443264 caffe.cpp:381] Batch 5, accuracy = 0.92
+I0727 00:01:43.906460 1934443264 caffe.cpp:381] Batch 5, loss = 0.542241
+I0727 00:01:43.938120 1934443264 caffe.cpp:381] Batch 6, accuracy = 0.91
+I0727 00:01:43.938150 1934443264 caffe.cpp:381] Batch 6, loss = 0.559257
+I0727 00:01:43.968787 1934443264 caffe.cpp:381] Batch 7, accuracy = 0.93
+I0727 00:01:43.968816 1934443264 caffe.cpp:381] Batch 7, loss = 0.472216
+I0727 00:01:44.001312 1934443264 caffe.cpp:381] Batch 8, accuracy = 0.94
+I0727 00:01:44.001341 1934443264 caffe.cpp:381] Batch 8, loss = 0.445917
+I0727 00:01:44.029739 1934443264 caffe.cpp:381] Batch 9, accuracy = 0.92
+I0727 00:01:44.029772 1934443264 caffe.cpp:381] Batch 9, loss = 0.480525
+I0727 00:01:44.059865 1934443264 caffe.cpp:381] Batch 10, accuracy = 0.92
+I0727 00:01:44.059898 1934443264 caffe.cpp:381] Batch 10, loss = 0.531594
+I0727 00:01:44.088306 1934443264 caffe.cpp:381] Batch 11, accuracy = 0.92
+I0727 00:01:44.088340 1934443264 caffe.cpp:381] Batch 11, loss = 0.543581
+I0727 00:01:44.119846 1934443264 caffe.cpp:381] Batch 12, accuracy = 0.83
+I0727 00:01:44.119877 1934443264 caffe.cpp:381] Batch 12, loss = 0.67841
+I0727 00:01:44.150900 1934443264 caffe.cpp:381] Batch 13, accuracy = 0.94
+I0727 00:01:44.150998 1934443264 caffe.cpp:381] Batch 13, loss = 0.471371
+I0727 00:01:44.184655 1934443264 caffe.cpp:381] Batch 14, accuracy = 0.95
+I0727 00:01:44.184686 1934443264 caffe.cpp:381] Batch 14, loss = 0.508547
+I0727 00:01:44.214793 1934443264 caffe.cpp:381] Batch 15, accuracy = 0.92
+I0727 00:01:44.214824 1934443264 caffe.cpp:381] Batch 15, loss = 0.507803
+I0727 00:01:44.247390 1934443264 caffe.cpp:381] Batch 16, accuracy = 0.91
+I0727 00:01:44.247419 1934443264 caffe.cpp:381] Batch 16, loss = 0.50551
+I0727 00:01:44.276626 1934443264 caffe.cpp:381] Batch 17, accuracy = 0.9
+I0727 00:01:44.276657 1934443264 caffe.cpp:381] Batch 17, loss = 0.547201
+I0727 00:01:44.308115 1934443264 caffe.cpp:381] Batch 18, accuracy = 0.92
+I0727 00:01:44.308146 1934443264 caffe.cpp:381] Batch 18, loss = 0.513329
+I0727 00:01:44.337630 1934443264 caffe.cpp:381] Batch 19, accuracy = 0.92
+I0727 00:01:44.337661 1934443264 caffe.cpp:381] Batch 19, loss = 0.560503
+I0727 00:01:44.370326 1934443264 caffe.cpp:381] Batch 20, accuracy = 0.87
+I0727 00:01:44.370358 1934443264 caffe.cpp:381] Batch 20, loss = 0.556425
+I0727 00:01:44.400152 1934443264 caffe.cpp:381] Batch 21, accuracy = 0.84
+I0727 00:01:44.400183 1934443264 caffe.cpp:381] Batch 21, loss = 0.614201
+I0727 00:01:44.431962 1934443264 caffe.cpp:381] Batch 22, accuracy = 0.94
+I0727 00:01:44.431995 1934443264 caffe.cpp:381] Batch 22, loss = 0.457587
+I0727 00:01:44.461412 1934443264 caffe.cpp:381] Batch 23, accuracy = 0.92
+I0727 00:01:44.461443 1934443264 caffe.cpp:381] Batch 23, loss = 0.555504
+I0727 00:01:44.493445 1934443264 caffe.cpp:381] Batch 24, accuracy = 0.91
+I0727 00:01:44.493516 1934443264 caffe.cpp:381] Batch 24, loss = 0.492875
+I0727 00:01:44.523396 1934443264 caffe.cpp:381] Batch 25, accuracy = 0.94
+I0727 00:01:44.523433 1934443264 caffe.cpp:381] Batch 25, loss = 0.471205
+I0727 00:01:44.555320 1934443264 caffe.cpp:381] Batch 26, accuracy = 0.93
+I0727 00:01:44.555371 1934443264 caffe.cpp:381] Batch 26, loss = 0.46078
+I0727 00:01:44.584758 1934443264 caffe.cpp:381] Batch 27, accuracy = 0.91
+I0727 00:01:44.584786 1934443264 caffe.cpp:381] Batch 27, loss = 0.516839
+I0727 00:01:44.616545 1934443264 caffe.cpp:381] Batch 28, accuracy = 0.96
+I0727 00:01:44.616575 1934443264 caffe.cpp:381] Batch 28, loss = 0.445957
+I0727 00:01:44.645931 1934443264 caffe.cpp:381] Batch 29, accuracy = 0.88
+I0727 00:01:44.645967 1934443264 caffe.cpp:381] Batch 29, loss = 0.6446
+I0727 00:01:44.677723 1934443264 caffe.cpp:381] Batch 30, accuracy = 0.95
+I0727 00:01:44.677752 1934443264 caffe.cpp:381] Batch 30, loss = 0.452647
+I0727 00:01:44.707228 1934443264 caffe.cpp:381] Batch 31, accuracy = 0.9
+I0727 00:01:44.707260 1934443264 caffe.cpp:381] Batch 31, loss = 0.548587
+I0727 00:01:44.739732 1934443264 caffe.cpp:381] Batch 32, accuracy = 0.94
+I0727 00:01:44.739761 1934443264 caffe.cpp:381] Batch 32, loss = 0.509797
+I0727 00:01:44.769515 1934443264 caffe.cpp:381] Batch 33, accuracy = 0.94
+I0727 00:01:44.769546 1934443264 caffe.cpp:381] Batch 33, loss = 0.499985
+I0727 00:01:44.804766 1934443264 caffe.cpp:381] Batch 34, accuracy = 0.94
+I0727 00:01:44.804795 1934443264 caffe.cpp:381] Batch 34, loss = 0.452719
+I0727 00:01:44.833577 1934443264 caffe.cpp:381] Batch 35, accuracy = 0.84
+I0727 00:01:44.833608 1934443264 caffe.cpp:381] Batch 35, loss = 0.628487
+I0727 00:01:44.866924 1934443264 caffe.cpp:381] Batch 36, accuracy = 0.93
+I0727 00:01:44.866955 1934443264 caffe.cpp:381] Batch 36, loss = 0.449822
+I0727 00:01:44.895503 1934443264 caffe.cpp:381] Batch 37, accuracy = 0.81
+I0727 00:01:44.895532 1934443264 caffe.cpp:381] Batch 37, loss = 0.656729
+I0727 00:01:44.926841 1934443264 caffe.cpp:381] Batch 38, accuracy = 0.86
+I0727 00:01:44.926874 1934443264 caffe.cpp:381] Batch 38, loss = 0.631623
+I0727 00:01:44.958943 1934443264 caffe.cpp:381] Batch 39, accuracy = 0.95
+I0727 00:01:44.958973 1934443264 caffe.cpp:381] Batch 39, loss = 0.479421
+I0727 00:01:44.991243 1934443264 caffe.cpp:381] Batch 40, accuracy = 0.93
+I0727 00:01:44.991273 1934443264 caffe.cpp:381] Batch 40, loss = 0.498626
+I0727 00:01:45.019760 1934443264 caffe.cpp:381] Batch 41, accuracy = 0.95
+I0727 00:01:45.019790 1934443264 caffe.cpp:381] Batch 41, loss = 0.52568
+I0727 00:01:45.050673 1934443264 caffe.cpp:381] Batch 42, accuracy = 0.91
+I0727 00:01:45.050703 1934443264 caffe.cpp:381] Batch 42, loss = 0.574733
+I0727 00:01:45.080518 1934443264 caffe.cpp:381] Batch 43, accuracy = 0.9
+I0727 00:01:45.080548 1934443264 caffe.cpp:381] Batch 43, loss = 0.556523
+I0727 00:01:45.111312 1934443264 caffe.cpp:381] Batch 44, accuracy = 0.95
+I0727 00:01:45.111343 1934443264 caffe.cpp:381] Batch 44, loss = 0.499967
+I0727 00:01:45.140476 1934443264 caffe.cpp:381] Batch 45, accuracy = 0.87
+I0727 00:01:45.140506 1934443264 caffe.cpp:381] Batch 45, loss = 0.537358
+I0727 00:01:45.173477 1934443264 caffe.cpp:381] Batch 46, accuracy = 0.92
+I0727 00:01:45.173516 1934443264 caffe.cpp:381] Batch 46, loss = 0.509583
+I0727 00:01:45.204303 1934443264 caffe.cpp:381] Batch 47, accuracy = 0.91
+I0727 00:01:45.204334 1934443264 caffe.cpp:381] Batch 47, loss = 0.453649
+I0727 00:01:45.236830 1934443264 caffe.cpp:381] Batch 48, accuracy = 0.87
+I0727 00:01:45.236860 1934443264 caffe.cpp:381] Batch 48, loss = 0.617736
 I0727 00:01:45.266126 1934443264 caffe.cpp:381] Batch 49, accuracy = 0.91
 I0727 00:01:45.266155 1934443264 caffe.cpp:381] Batch 49, loss = 0.528541
 I0727 00:01:45.266161 1934443264 caffe.cpp:386] Loss: 0.521581
@@ -149,13 +280,22 @@ Output:
 All acknowledgements go to the following research paper by Han et al. ([Learning both Weights and Connections for Efficient
 Neural Networks](https://arxiv.org/pdf/1506.02626.pdf)):
 
-    @inproceedings{han2015learning,
-      title={Learning both weights and connections for efficient neural network},
-      author={Han, Song and Pool, Jeff and Tran, John and Dally, William},
-      booktitle={Advances in Neural Information Processing Systems},
-      pages={1135--1143},
-      year={2015}
-    }
+```
+  @article{DBLP:journals/corr/HanPTD15,
+    author    = {Song Han and
+                 Jeff Pool and
+                 John Tran and
+                 William J. Dally},
+    title     = {Learning both Weights and Connections for Efficient Neural Networks},
+    journal   = {CoRR},
+    volume    = {abs/1506.02626},
+    year      = {2015},
+    url       = {http://arxiv.org/abs/1506.02626},
+    timestamp = {Wed, 01 Jul 2015 15:10:24 +0200},
+    biburl    = {http://dblp.uni-trier.de/rec/bib/journals/corr/HanPTD15},
+    bibsource = {dblp computer science bibliography, http://dblp.org}
+  }
+```
 
 
 # Caffe

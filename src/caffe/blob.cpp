@@ -62,8 +62,12 @@ void Blob<Dtype>::AddMask() {
   if(apply_mask_) return;
   apply_mask_ = true;
   mask_.reset(new SyncedMemory(count_ * sizeof(Dtype))); // TODO Check: should be initialized to zeros // changed from capacity_ to count_ b/c capacity_ not always set to non-zero
+  masked_data_.reset(new SyncedMemory(count_ * sizeof(Dtype)));
+  masked_diff_.reset(new SyncedMemory(count_ * sizeof(Dtype)));
 
   caffe_set(count_, Dtype(1), static_cast<Dtype *>(mask_->mutable_cpu_data()));
+  caffe_set(count_, Dtype(0), static_cast<Dtype *>(masked_data_->mutable_cpu_data()));
+  caffe_set(count_, Dtype(0), static_cast<Dtype *>(masked_diff_->mutable_cpu_data()));
   LOG(INFO) << "Mask added";
 
 
@@ -114,10 +118,9 @@ const Dtype* Blob<Dtype>::cpu_data() const {
     // masked_blob.Reshape(shape());
     // masked_blob.reset(new Blob<Dtype>(shape()));
     // masked_blob.CopyFrom(*this, false, true);
-    Dtype* masked_weight = new Dtype[count_];//masked_blob.mutable_cpu_data();
     const Dtype* mask_data = (const Dtype*)mask_->cpu_data();
     const Dtype* orig_data = (const Dtype*)data_->cpu_data();
-    caffe_mul(count_, mask_data, orig_data, masked_weight);
+    caffe_mul(count_, mask_data, orig_data, (Dtype*)masked_data_->mutable_cpu_data());
     // for(int i = 0 ; i < 5 ; i++) {
     //   LOG(INFO) << mask_data[i] << " "
     //   << orig_data[i] << " "
@@ -125,7 +128,7 @@ const Dtype* Blob<Dtype>::cpu_data() const {
     // }
 
       // caffe_mul(count, bottom[0]->cpu_data(), bottom[1]->cpu_data(), top_data);
-    return (const Dtype*)(masked_weight);
+    return (const Dtype*)masked_data_->cpu_data();
   }
   return (const Dtype*)data_->cpu_data();
 }
@@ -151,9 +154,8 @@ const Dtype* Blob<Dtype>::cpu_diff() const {
     // Blob<Dtype> masked_blob;
     // masked_blob.Reshape(shape());
     // Dtype* masked_weight = masked_blob.mutable_cpu_diff();
-    Dtype* masked_weight = new Dtype[count_];
-    caffe_mul(count_, (const Dtype*)mask_->cpu_data(), (const Dtype*)diff_->cpu_data(), masked_weight);
-    return (const Dtype*)(masked_weight);
+    caffe_mul(count_, (const Dtype*)mask_->cpu_data(), (const Dtype*)diff_->cpu_data(), (Dtype*)masked_diff_->mutable_cpu_data());
+    return (const Dtype*)(masked_diff_->cpu_data());
   }
   return (const Dtype*)diff_->cpu_data();
 }
@@ -174,9 +176,8 @@ Dtype* Blob<Dtype>::mutable_cpu_data() {
     // Blob<Dtype> masked_blob;
     // masked_blob.Reshape(shape());
     // Dtype* masked_weight = masked_blob.mutable_cpu_data();
-    Dtype* masked_weight = new Dtype[count_];
-    caffe_mul(count_, (const Dtype*)mask_->cpu_data(), (const Dtype*)data_->cpu_data(), masked_weight);
-    return static_cast<Dtype*>(masked_weight);
+    caffe_mul(count_, (const Dtype*)mask_->cpu_data(), (const Dtype*)data_->cpu_data(), (Dtype*)masked_data_->mutable_cpu_data());
+    return static_cast<Dtype*>(masked_data_->mutable_cpu_data());
   }
   return static_cast<Dtype*>(data_->mutable_cpu_data());
 }
@@ -198,9 +199,8 @@ Dtype* Blob<Dtype>::mutable_cpu_diff() {
     // Blob<Dtype> masked_blob;
     // masked_blob.Reshape(shape());
     // Dtype* masked_weight = masked_blob.mutable_cpu_diff();
-    Dtype* masked_weight = new Dtype[count_];
-    caffe_mul(count_, (const Dtype*)mask_->cpu_data(), (const Dtype*)diff_->cpu_data(), masked_weight);
-    return static_cast<Dtype*>(masked_weight);
+    caffe_mul(count_, (const Dtype*)mask_->cpu_data(), (const Dtype*)diff_->cpu_data(), (Dtype*)masked_diff_->mutable_cpu_data());
+    return static_cast<Dtype*>(masked_diff_->mutable_cpu_data());
   }
   return static_cast<Dtype*>(diff_->mutable_cpu_data());
 }
@@ -218,6 +218,8 @@ void Blob<Dtype>::ShareData(const Blob& other) {
   if (other.apply_mask_) {
     apply_mask_ = true;
     mask_ = other.mask();
+    masked_data_ = other.masked_data();
+    masked_diff_ = other.masked_diff();
   }
 }
 
@@ -275,7 +277,6 @@ void Blob<Dtype>::Prune_cpu(Dtype threshold_param) {
   Dtype stddev = std_data();
   const Dtype threshold = threshold_param * stddev;
   LOG(INFO) << "================ Computed Threshold is: " << threshold << ", std is " << stddev << ", threshold_param is " << threshold_param;
-  // // // const Dtype* weight = (const Dtype*)data_->cpu_data(); // TODO fix cpu_data mask
   const Dtype* weight = (const Dtype*)cpu_data(); // TODO fix cpu_data mask
   Dtype* mask = static_cast<Dtype*>(mask_->mutable_cpu_data());
   const int count = count_;
